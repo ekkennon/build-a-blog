@@ -17,6 +17,7 @@
 import webapp2
 import os
 import jinja2
+import logging
 from google.appengine.ext import db
 
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
@@ -67,21 +68,37 @@ class NewPostForm(Handler):
 
 
 class PostListing(Handler):
-	def get(self):
-		posts = db.GqlQuery("SELECT * FROM Post ORDER BY created DESC limit 5")
-		self.render("allPosts.html", posts=posts)
+	def get_posts(self,limit,offset):
+		offset = (int(offset) - 2) * int(limit)
+		return db.GqlQuery("SELECT * FROM Post ORDER BY created DESC limit " + limit + " offset " + str(offset))
 
-class ViewPostHandler(webapp2.RequestHandler):
+	def get(self):
+		limit = 5
+		page = self.request.get("page")
+
+		if not page:
+			self.redirect("/blog?page=1")
+		else:
+			page = int(page)
+			page = page + 1
+			page = str(page)
+			self.render("allPosts.html", posts=self.get_posts(str(limit),page),page=page)
+
+class ViewPost(Handler):
     def get(self, id):
     	post = Post.get_by_id(int(id))
-    	self.response.write(post.title)
+    	if post == None:
+    		error = "There is currently no post with an ID of " + id
+    		self.render("errorpage.html",error=error)
+    	else:
+    		self.render("post.html", post=post)
 
 
 routes = [
     ('/', MainPage),
     ('/blog', PostListing),
     ('/newpost', NewPostForm),
-    webapp2.Route('/blog/<id:\d+>', ViewPostHandler)
+    webapp2.Route('/blog/<id:\d+>', ViewPost)
 ]
 
 app = webapp2.WSGIApplication(routes, debug=True)
